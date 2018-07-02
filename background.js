@@ -18,17 +18,60 @@ chrome.browserAction.onClicked.addListener(function(tab) {
             return false;
         }
 
-        var configuration = prepareConfiguration(samuraiData, namespace);
-        console.log(configuration);
+        var configuration = prepareConfigurationForSamurai(samuraiData, namespace);
         if(configuration.metric){
-            var base64Configuration = LZString.compressToBase64(JSON.stringify(configuration));
 
-            // wrapping the base 64 with square bracket ([]), because while decoding some string is coming as [];
-            var formatBase64Configuration = base64Configuration.replace(/[/]/g, '$');
-            console.log(formatBase64Configuration);
+            // console.log(configuration);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://local.sherlock-admin.mn/api/v1/samurai/configuration/add', true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify(configuration));
 
-            window.open(urlToRedirect+formatBase64Configuration,'_blank');
-            // window.close();
+            xhr.onload = function () {
+                if(xhr.status === 200){
+                    alert('Configuration created successfully');
+                }
+                else {
+                    var responseText = xhr.responseText;
+
+                    try{
+                        response = JSON.parse(responseText);
+                        if(response.httpCode == 422 && response.error){
+                            alert(response.error);
+                        }
+                        else {
+                            alert('Some error occurred, unable to create config');
+                        }
+                    }
+                    catch(err){
+                        alert('Some error occurred, unable to create config');
+                    }
+                }
+
+                // var response = xhr.responseText;
+                // console.log(xhr.responseText);
+            };
+            //
+            // function post(path, params, method) {
+            //     method = method || "post"; // Set method to post by default if not specified.
+            //     // The rest of this code assumes you are not using a library.
+            //     // It can be made less wordy if you use one.
+            //     var form = document.createElement("form");
+            //
+            //     form.setAttribute("method", method);
+            //     form.setAttribute("action", path);
+            //     for(var key in params) {
+            //         if(params.hasOwnProperty(key)) {
+            //             var hiddenField = document.createElement("input");
+            //             hiddenField.setAttribute("type", "hidden");
+            //             hiddenField.setAttribute("name", key);
+            //             hiddenField.setAttribute("value", JSON.stringify(params[key]));
+            //             form.appendChild(hiddenField);
+            //         }
+            //     }
+            //     document.body.appendChild(form);
+            //     form.submit();
+            // }
         }
         else {
             alert('Some error occurred in chrome extension');
@@ -47,29 +90,118 @@ var getUrlParameter = function (queryString, searchKey) {
     return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
 };
 
-var prepareConfiguration = function(samuraiData, namespace){
+// var prepareConfiguration = function(samuraiData, namespace){
+//
+//     var configuration = {
+//         id : null,
+//         metric : {},
+//         filters: [],
+//         splits : [],
+//         subscribers : {},
+//         threshold: null,
+//         showMetricData : {
+//             collapsedFilters : [],
+//             formula : null
+//         }
+//     };
+//
+//     var metricString = samuraiData.values[0];
+//     var metricDetails = {};
+//     var filters = [];
+//     var constraints = null;
+//     var hasCustomMeasure = typeof samuraiData.customMeasures !== 'undefined' && samuraiData.customMeasures.length;
+//
+//     if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
+//         // correlation
+//         if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
+//
+//             var metricFormula = metricString.id;
+//
+//             if(hasCustomMeasure){
+//                 metricFormula = samuraiData.customMeasures[0].parsedFormula;
+//             }
+//
+//             console.log('metric formula printing');
+//             console.log(metricFormula);
+//             var formattedMetrics = formatFromCurlyBraces(metricFormula);
+//             configuration.metric = {
+//                 type : 'correlation',
+//                 namespace :  namespace,
+//                 metricType : 'Correlation',
+//                 metricName : metricString.label,
+//                 numeratorKonomMetric : formattedMetrics[0],
+//                 denominatorKonomMetric : formattedMetrics[1]
+//             };
+//             constraints  = getConstraints(samuraiData, metricString.id);
+//             configuration.splits = constraints.splits;
+//             configuration.filters = constraints.filters;
+//             configuration.showMetricData.collapsedFilters = constraints.collapsedFilters;
+//             configuration.showMetricData.formula = formatFormula(metricFormula);
+//         }
+//         else {
+//             alert('This measure is not supported for creating the configuration till now');
+//             return false;
+//         }
+//     }
+//     else {
+//         // singular
+//         configuration.metric = {
+//             type : 'singular',
+//             namespace :  namespace,
+//             metricType : 'Singular',
+//             metricName : metricString.label,
+//             konomMetric : metricString.id
+//         };
+//
+//         constraints  = getConstraints(samuraiData, metricString.id);
+//         configuration.splits = constraints.splits;
+//         configuration.filters = constraints.filters;
+//         configuration.showMetricData.collapsedFilters = constraints.collapsedFilters
+//     }
+//
+//     return configuration;
+// };
 
-    var configuration = {
-        id : null,
-        metric : {},
-        filters: [],
-        splits : [],
-        subscribers : {},
-        threshold: null,
-        showMetricData : {
-            collapsedFilters : [],
-            formula : null
-        }
-    };
+var prepareConfigurationForSamurai = function(samuraiData, namespace){
 
     var metricString = samuraiData.values[0];
-    var metricDetails = {};
-    var filters = [];
+
+    // var configuration = new Map();
+    // var metric = new Map();
+    //
+    // configuration.set('name', metricString.label);
+    // configuration.set('namespace', namespace);
+    // configuration.set('datasource', 'Samurai');
+    // configuration.set('threshold', 50);
+    // configuration.set('trend', generateRandom(["drop", "rise"]));
+    // configuration.set('track', generateRandom(["gradual", "sudden"]));
+    //
+    // metric.set('name', null);
+    // metric.set('formula', null);
+    // configuration.set('metric', metric);
+    // configuration.set('filters', []);
+    // configuration.set('splits', []);
+
+    var configuration = {
+        name : metricString.label,
+        namespace : namespace,
+        datasource : 'Samurai',
+        threshold : 50,
+        trend : generateRandom(["drop", "rise"]),
+        track : generateRandom(["gradual", "sudden"]),
+        metric : {
+            name : null,
+            formula : null
+        },
+        filters : [],
+        splits : []
+    };
+
+
     var constraints = null;
     var hasCustomMeasure = typeof samuraiData.customMeasures !== 'undefined' && samuraiData.customMeasures.length;
 
     if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
-        // correlation
         if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
 
             var metricFormula = metricString.id;
@@ -78,22 +210,26 @@ var prepareConfiguration = function(samuraiData, namespace){
                 metricFormula = samuraiData.customMeasures[0].parsedFormula;
             }
 
-            console.log('metric formula printing');
-            console.log(metricFormula);
-            var formattedMetrics = formatFromCurlyBraces(metricFormula);
-            configuration.metric = {
-                type : 'correlation',
-                namespace :  namespace,
-                metricType : 'Correlation',
-                metricName : metricString.label,
-                numeratorKonomMetric : formattedMetrics[0],
-                denominatorKonomMetric : formattedMetrics[1]
-            };
+            // var formattedMetrics = formatFromCurlyBraces(metricFormula);
             constraints  = getConstraints(samuraiData, metricString.id);
+
+
+            configuration.metric.name = metricString.label;
+            configuration.metric.formula = metricFormula;
             configuration.splits = constraints.splits;
             configuration.filters = constraints.filters;
-            configuration.showMetricData.collapsedFilters = constraints.collapsedFilters;
-            configuration.showMetricData.formula = formatFormula(metricFormula);
+
+            // = {
+            //     type : 'correlation',
+            //     namespace :  namespace,
+            //     metricType : 'Correlation',
+            //     metricName : metricString.label,
+            //     numeratorKonomMetric : formattedMetrics[0],
+            //     denominatorKonomMetric : formattedMetrics[1]
+            // };
+            //
+            // configuration.showMetricData.collapsedFilters = constraints.collapsedFilters;
+            // configuration.showMetricData.formula = formatFormula(metricFormula);
         }
         else {
             alert('This measure is not supported for creating the configuration till now');
@@ -101,24 +237,40 @@ var prepareConfiguration = function(samuraiData, namespace){
         }
     }
     else {
-        console.log('else');
         // singular
-        configuration.metric = {
-            type : 'singular',
-            namespace :  namespace,
-            metricType : 'Singular',
-            metricName : metricString.label,
-            konomMetric : metricString.id
-        };
 
         constraints  = getConstraints(samuraiData, metricString.id);
+        configuration.metric.name = metricString.label;
+        configuration.metric.formula = metricString.id;
         configuration.splits = constraints.splits;
         configuration.filters = constraints.filters;
-        configuration.showMetricData.collapsedFilters = constraints.collapsedFilters
+
+        // configuration.metric = {
+        //     type : 'singular',
+        //     namespace :  namespace,
+        //     metricType : 'Singular',
+        //     metricName : metricString.label,
+        //     konomMetric : metricString.id
+        // };
+        //
+        //
+        // configuration.splits = constraints.splits;
+        // configuration.filters = constraints.filters;
+        // configuration.showMetricData.collapsedFilters = constraints.collapsedFilters
     }
+
+    // metric.set('name', metricString.label);
+    // metric.set('formula', metricString.id);
+    // metric.set('splits', constraints.splits);
+    // metric.set('filters', constraints.splits);
 
     return configuration;
 };
+
+var generateRandom = function(values){
+    return values[Math.floor(Math.random() * (values.length))];
+};
+
 
 var formatFromCurlyBraces = function(str){
     var found = [],          // an array to collect the strings that are found
@@ -155,10 +307,8 @@ var getConstraints = function(samuraiData, konomMetric){
 
             if(row.id === 'Time') continue;
             constraints.splits.push({
-                type : 'criteria',
-                selectionMetric : konomMetric,
-                threshold : row.threshold,
-                entityName : row.id
+                name : row.id,
+                limit : row.threshold
             });
 
             splitNames.push(row.id);
@@ -179,16 +329,22 @@ var getConstraints = function(samuraiData, konomMetric){
                 isPivot : splitNames.indexOf(samuraiFilter.id) !== -1
             });
 
-            for(var value in samuraiFilter.data.values){
-                if(!samuraiFilter.data.values.hasOwnProperty(value)) continue;
-                var filterValue = samuraiFilter.data.values[value];
+            constraints.filters.push({
+                type : samuraiFilter.data.filterType,
+                name : samuraiFilter.id,
+                values : samuraiFilter.data.data
+            });
 
-                constraints.filters.push({
-                    type : 'specific',
-                    entityName : samuraiFilter.id,
-                    entityValue : filterValue
-                });
-            }
+            // for(var value in samuraiFilter.data.values){
+            //     if(!samuraiFilter.data.values.hasOwnProperty(value)) continue;
+            //     var filterValue = samuraiFilter.data.values[value];
+            //
+            //     constraints.filters.push({
+            //         type : samuraiFilter.data.filterType,
+            //         name : samuraiFilter.id,
+            //         entityValue : filterValue
+            //     });
+            // }
         }
     }
 

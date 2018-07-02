@@ -16,6 +16,7 @@
   "permissions" : [
     "storage",
     "tabs",
-    "https://samurai.reports.mn/reporting"
+    "https://samurai.reports.mn/reporting",
+    "http://local.sherlock-admin.mn/api/v1"
   ]
 }

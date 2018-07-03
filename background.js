@@ -2,6 +2,7 @@ var allowedHost = "samurai.reports.mn";
 var urlToRedirect = "http://local.cmadmin-v2.mn/sherlock/#/configurations/add/";
 
 chrome.browserAction.onClicked.addListener(function(tab) {
+    var baseAdminUrl = "https://sherlock.reports.mn/";
     var url = new URL(tab.url);
     // var location = url.
     if(url.host === allowedHost) {
@@ -23,7 +24,7 @@ chrome.browserAction.onClicked.addListener(function(tab) {
 
             // console.log(configuration);
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', 'http://local.sherlock-admin.mn/api/v1/samurai/configuration/add', true);
+            xhr.open('POST', baseAdminUrl+'api/v1/samurai/configuration/add', true);
             xhr.setRequestHeader("Content-Type", "application/json");
             xhr.send(JSON.stringify(configuration));
 
@@ -40,7 +41,8 @@ chrome.browserAction.onClicked.addListener(function(tab) {
                             alert(response.error);
                         }
                         else {
-                            alert('Some error occurred, unable to create config');
+                            var errorText = response.error ? response.error : "Some error occurred, unable to create config";
+                            alert(errorText);
                         }
                     }
                     catch(err){
@@ -183,7 +185,7 @@ var prepareConfigurationForSamurai = function(samuraiData, namespace){
     // configuration.set('splits', []);
 
     var configuration = {
-        name : metricString.label,
+        name : metricString.label+'-'+(new Date).getTime(),
         namespace : namespace,
         datasource : 'Samurai',
         threshold : 50,

@@ -17,6 +17,7 @@
     "storage",
     "tabs",
     "https://samurai.reports.mn/reporting",
-    "http://local.sherlock-admin.mn/api/v1"
+    "http://local.sherlock-admin.mn/api/v1",
+    "https://sherlock.reports.mn/api/v1"
   ]
 }

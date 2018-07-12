@@ -253,7 +253,7 @@ var util = {
         },
 
         getQuery : function(string){
-            string =  string.replace('"1hour"', "${granularity}");
+            string =  string.replace('"1hour"', '"${granularity}"');
             return "?target="+string;
         }
     }

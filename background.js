@@ -1,354 +1,261 @@
-var allowedHost = "samurai.reports.mn";
-var urlToRedirect = "http://local.cmadmin-v2.mn/sherlock/#/configurations/add/";
+var supportedHosts = {
+    samurai : "samurai.reports.mn",
+    grafana :  "graphite.srv.media.net"
+};
+
+// Local
+var dashBoardBaseUrl = "http://local.sherlock-admin.mn";
+
+// Production
+// var dashBoardBaseUrl = "https://sherlock.reports.mn";
 
 chrome.browserAction.onClicked.addListener(function(tab) {
-    var baseAdminUrl = "https://sherlock.reports.mn/";
+
     var url = new URL(tab.url);
-    // var location = url.
-    if(url.host === allowedHost) {
-        // var pathname = url.pathname;
+    var hostname = url.hostname;
+
+    // Samurai
+    if(hostname === supportedHosts.samurai){
         var queryString = url.search;
-        var namespace = url.pathname.split('reporting/')[1];
-        var selection = getUrlParameter(queryString, 'selection');
+        var selection = util.getUrlParam(queryString, 'selection');
         var samuraiData = LZString.decompressFromBase64(selection);
         samuraiData = JSON.parse(samuraiData);
-        var metricLength = samuraiData.values.length;
+        configuration('samurai', samuraiData, tab);
+    }
+    // Grafana
+    else if(hostname.indexOf(supportedHosts.grafana) !== -1){
 
-        if(metricLength !== 1){
-            alert('Exactly one measure should be present');
-            return false;
-        }
-
-        var configuration = prepareConfigurationForSamurai(samuraiData, namespace);
-        if(configuration.metric){
-
-            // console.log(configuration);
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', baseAdminUrl+'api/v1/samurai/configuration/add', true);
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify(configuration));
-
-            xhr.onload = function () {
-                if(xhr.status === 200){
-                    alert('Configuration created successfully');
-                }
-                else {
-                    var responseText = xhr.responseText;
-
-                    try{
-                        response = JSON.parse(responseText);
-                        if(response.httpCode == 422 && response.error){
-                            alert(response.error);
-                        }
-                        else {
-                            var errorText = response.error ? response.error : "Some error occurred, unable to create config";
-                            alert(errorText);
-                        }
-                    }
-                    catch(err){
-                        alert('Some error occurred, unable to create config');
-                    }
-                }
-
-                // var response = xhr.responseText;
-                // console.log(xhr.responseText);
-            };
-            //
-            // function post(path, params, method) {
-            //     method = method || "post"; // Set method to post by default if not specified.
-            //     // The rest of this code assumes you are not using a library.
-            //     // It can be made less wordy if you use one.
-            //     var form = document.createElement("form");
-            //
-            //     form.setAttribute("method", method);
-            //     form.setAttribute("action", path);
-            //     for(var key in params) {
-            //         if(params.hasOwnProperty(key)) {
-            //             var hiddenField = document.createElement("input");
-            //             hiddenField.setAttribute("type", "hidden");
-            //             hiddenField.setAttribute("name", key);
-            //             hiddenField.setAttribute("value", JSON.stringify(params[key]));
-            //             form.appendChild(hiddenField);
-            //         }
-            //     }
-            //     document.body.appendChild(form);
-            //     form.submit();
-            // }
-        }
-        else {
-            alert('Some error occurred in chrome extension');
-        }
-
+        var data = util.getUrlParam(url.search, 'target');
+        configuration('grafana', data, tab)
     }
     else {
         alert('Sherlock extension is not supported on this page');
     }
 });
 
-var getUrlParameter = function (queryString, searchKey) {
-    searchKey = searchKey.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-    var regex = new RegExp('[\\?&]' + searchKey + '=([^&#]*)');
-    var results = regex.exec(queryString);
-    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-};
+var configuration = function(type, data, tab){
 
-// var prepareConfiguration = function(samuraiData, namespace){
-//
-//     var configuration = {
-//         id : null,
-//         metric : {},
-//         filters: [],
-//         splits : [],
-//         subscribers : {},
-//         threshold: null,
-//         showMetricData : {
-//             collapsedFilters : [],
-//             formula : null
-//         }
-//     };
-//
-//     var metricString = samuraiData.values[0];
-//     var metricDetails = {};
-//     var filters = [];
-//     var constraints = null;
-//     var hasCustomMeasure = typeof samuraiData.customMeasures !== 'undefined' && samuraiData.customMeasures.length;
-//
-//     if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
-//         // correlation
-//         if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
-//
-//             var metricFormula = metricString.id;
-//
-//             if(hasCustomMeasure){
-//                 metricFormula = samuraiData.customMeasures[0].parsedFormula;
-//             }
-//
-//             console.log('metric formula printing');
-//             console.log(metricFormula);
-//             var formattedMetrics = formatFromCurlyBraces(metricFormula);
-//             configuration.metric = {
-//                 type : 'correlation',
-//                 namespace :  namespace,
-//                 metricType : 'Correlation',
-//                 metricName : metricString.label,
-//                 numeratorKonomMetric : formattedMetrics[0],
-//                 denominatorKonomMetric : formattedMetrics[1]
-//             };
-//             constraints  = getConstraints(samuraiData, metricString.id);
-//             configuration.splits = constraints.splits;
-//             configuration.filters = constraints.filters;
-//             configuration.showMetricData.collapsedFilters = constraints.collapsedFilters;
-//             configuration.showMetricData.formula = formatFormula(metricFormula);
-//         }
-//         else {
-//             alert('This measure is not supported for creating the configuration till now');
-//             return false;
-//         }
-//     }
-//     else {
-//         // singular
-//         configuration.metric = {
-//             type : 'singular',
-//             namespace :  namespace,
-//             metricType : 'Singular',
-//             metricName : metricString.label,
-//             konomMetric : metricString.id
-//         };
-//
-//         constraints  = getConstraints(samuraiData, metricString.id);
-//         configuration.splits = constraints.splits;
-//         configuration.filters = constraints.filters;
-//         configuration.showMetricData.collapsedFilters = constraints.collapsedFilters
-//     }
-//
-//     return configuration;
-// };
+    var configuration = {};
 
-var prepareConfigurationForSamurai = function(samuraiData, namespace){
+    switch (type)
+    {
+        case 'samurai':
+            prepareConfig.samurai(data, tab);
+            break;
 
-    var metricString = samuraiData.values[0];
-
-    // var configuration = new Map();
-    // var metric = new Map();
-    //
-    // configuration.set('name', metricString.label);
-    // configuration.set('namespace', namespace);
-    // configuration.set('datasource', 'Samurai');
-    // configuration.set('threshold', 50);
-    // configuration.set('trend', generateRandom(["drop", "rise"]));
-    // configuration.set('track', generateRandom(["gradual", "sudden"]));
-    //
-    // metric.set('name', null);
-    // metric.set('formula', null);
-    // configuration.set('metric', metric);
-    // configuration.set('filters', []);
-    // configuration.set('splits', []);
-
-    var configuration = {
-        name : metricString.label+'-'+(new Date).getTime(),
-        namespace : namespace,
-        datasource : 'Samurai',
-        threshold : 50,
-        trend : generateRandom(["drop", "rise"]),
-        track : generateRandom(["gradual", "sudden"]),
-        metric : {
-            name : null,
-            formula : null
-        },
-        filters : [],
-        splits : []
-    };
-
-
-    var constraints = null;
-    var hasCustomMeasure = typeof samuraiData.customMeasures !== 'undefined' && samuraiData.customMeasures.length;
-
-    if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
-        if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
-
-            var metricFormula = metricString.id;
-
-            if(hasCustomMeasure){
-                metricFormula = samuraiData.customMeasures[0].parsedFormula;
-            }
-
-            // var formattedMetrics = formatFromCurlyBraces(metricFormula);
-            constraints  = getConstraints(samuraiData, metricString.id);
-
-
-            configuration.metric.name = metricString.label;
-            configuration.metric.formula = metricFormula;
-            configuration.splits = constraints.splits;
-            configuration.filters = constraints.filters;
-
-            // = {
-            //     type : 'correlation',
-            //     namespace :  namespace,
-            //     metricType : 'Correlation',
-            //     metricName : metricString.label,
-            //     numeratorKonomMetric : formattedMetrics[0],
-            //     denominatorKonomMetric : formattedMetrics[1]
-            // };
-            //
-            // configuration.showMetricData.collapsedFilters = constraints.collapsedFilters;
-            // configuration.showMetricData.formula = formatFormula(metricFormula);
-        }
-        else {
-            alert('This measure is not supported for creating the configuration till now');
-            return false;
-        }
+        case 'grafana':
+            prepareConfig.grafana(data, tab);
+            break;
     }
-    else {
-        // singular
-
-        constraints  = getConstraints(samuraiData, metricString.id);
-        configuration.metric.name = metricString.label;
-        configuration.metric.formula = metricString.id;
-        configuration.splits = constraints.splits;
-        configuration.filters = constraints.filters;
-
-        // configuration.metric = {
-        //     type : 'singular',
-        //     namespace :  namespace,
-        //     metricType : 'Singular',
-        //     metricName : metricString.label,
-        //     konomMetric : metricString.id
-        // };
-        //
-        //
-        // configuration.splits = constraints.splits;
-        // configuration.filters = constraints.filters;
-        // configuration.showMetricData.collapsedFilters = constraints.collapsedFilters
-    }
-
-    // metric.set('name', metricString.label);
-    // metric.set('formula', metricString.id);
-    // metric.set('splits', constraints.splits);
-    // metric.set('filters', constraints.splits);
 
     return configuration;
 };
 
-var generateRandom = function(values){
-    return values[Math.floor(Math.random() * (values.length))];
-};
+var prepareConfig = {
+
+    samurai : function(data, tab){
+
+        // Validate
+        if(data.values.length !== 1){
+            alert('Exactly one measure should be present');
+            return false;
+        }
+
+        // Create configuration
+        var metricString = data.values[0];
+        var url = new URL(tab.url);
+        var namespace = url.pathname.split('reporting/')[1];
+
+        var configuration = {
+            name : null,
+            namespace : namespace,
+            datasource : 'Samurai',
+            url : url.href,
+            threshold : 50,
+            trend : "drop",
+            track : "gradual",
+            metric : {
+                name : null,
+                formula : null
+            },
+            filters : [],
+            splits : []
+        };
 
 
-var formatFromCurlyBraces = function(str){
-    var found = [],          // an array to collect the strings that are found
-        rxp = /{([^}]+)}/g,
-        curMatch;
+        var constraints = null;
+        var hasCustomMeasure = typeof data.customMeasures !== 'undefined' && data.customMeasures.length;
 
-    while(curMatch = rxp.exec(str) ) {
-        found.push( curMatch[1] );
+        // Custom measure
+        if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
+            if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
+
+                var metricFormula = metricString.id;
+
+                if(hasCustomMeasure){
+                    metricFormula = data.customMeasures[0].parsedFormula;
+                }
+
+                constraints  = util.samurai.constrains(data);
+
+                configuration.metric.name = metricString.label;
+                configuration.metric.formula = metricFormula;
+                configuration.splits = constraints.splits;
+                configuration.filters = constraints.filters;
+            }
+            else {
+                alert('This measure is not supported yet for creating the configuration');
+                return false;
+            }
+        }
+        else {
+            // Singular
+            constraints  = util.samurai.constrains(data);
+            configuration.metric.name = metricString.label;
+            configuration.metric.formula = metricString.id;
+            configuration.splits = constraints.splits;
+            configuration.filters = constraints.filters;
+        }
+
+        util.redirectToDashboard(configuration, '/create-config');
+    },
+
+    grafana : function(data, tab){
+        var grafanaDataString = util.grafana.formatDataString(data);
+
+        if(typeof grafanaDataString === 'undefined' || grafanaDataString.length === 0){
+            alert('Invalid data string');
+            return false;
+        }
+
+        var constraints = grafanaDataString.split('.');
+        var url = new URL(tab.url);
+        var namespace = url.origin+url.pathname;
+
+        var configuration = {
+            name : null,
+            namespace : namespace,
+            datasource : 'Grafana',
+            threshold : 50,
+            trend : "drop",
+            track : "gradual",
+            query : util.grafana.getQuery(data),
+            metric : {
+                name : null,
+                formula : null
+            },
+            filters : [],
+            splits : []
+        };
+
+        for (var index = 0; index < constraints.length; index++)
+        {
+            if(index === constraints.length-1){
+                configuration.metric.name = configuration.metric.formula = constraints[index];
+                break;
+            }
+
+            if(constraints[index] === '*'){
+                configuration.splits.push({
+                    name : "TreeLevel-"+(index+1),
+                    limit : 0
+                })
+            }
+            else {
+                configuration.filters.push({
+                    type : 'include',
+                    name : 'TreeLevel-'+(index+1),
+                    values : [constraints[index]]
+                });
+            }
+        }
+        util.redirectToDashboard(configuration, '/create-config')
     }
-
-    return found;
 };
 
-var formatFormula = function(str){
-    var regex = /[{$}]/g;
+var util = {
+    /**
+     * @param values | array
+     * @returns {*}
+     */
 
-    return str.replace(regex, '')
-};
+    selectRandomFromList : function (values){
+        return values[Math.floor(Math.random() * (values.length))];
+    },
 
-var getConstraints = function(samuraiData, konomMetric){
+    getUrlParam : function (queryString, searchKey) {
+        searchKey = searchKey.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+        var regex = new RegExp('[\\?&]' + searchKey + '=([^&#]*)');
+        var results = regex.exec(queryString);
+        return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    },
 
-    var constraints = {
-        filters : [],
-        splits : [],
-        collapsedFilters : []
-    };
+    redirectToDashboard : function(configuration, path){
+        var urlToRedirect = dashBoardBaseUrl + path;
+        var encodedConfiguration = encodeURIComponent(LZString.compressToBase64(JSON.stringify(configuration)))
+        window.open(urlToRedirect+'?config='+encodedConfiguration,'_blank');
+    },
 
-    if(samuraiData.rows.length){
-        var splitNames = [];
-        var rows = samuraiData.rows;
-        for(var key in rows){
-            if(!rows.hasOwnProperty(key)) continue;
-            var row = rows[key];
+    // samurai specific utils
+    samurai : {
+        constrains : function(samuraiData){
 
-            if(row.id === 'Time') continue;
-            constraints.splits.push({
-                name : row.id,
-                limit : row.threshold
-            });
+            var constraints = {
+                filters : [],
+                splits : [],
+                collapsedFilters : []
+            };
 
-            splitNames.push(row.id);
+            if(samuraiData.rows.length){
+                var splitNames = [];
+                var rows = samuraiData.rows;
+                for(var key in rows){
+                    if(!rows.hasOwnProperty(key)) continue;
+                    var row = rows[key];
+
+                    // ignore time splits
+                    if(row.id === 'Time') continue;
+
+                    constraints.splits.push({
+                        name : row.id,
+                        limit : row.threshold
+                    });
+
+                    splitNames.push(row.id);
+                }
+            }
+
+            if(samuraiData.filters.length) {
+                var samuraiFilters = samuraiData.filters;
+                for(var filterKey in samuraiFilters){
+                    if(!samuraiFilters.hasOwnProperty(filterKey)) continue;
+                    var samuraiFilter = samuraiFilters[filterKey];
+
+                    // ignore time filters
+                    if(samuraiFilter.id === 'Time') continue;
+
+                    constraints.filters.push({
+                        type : samuraiFilter.data.filterType,
+                        name : samuraiFilter.id,
+                        values : samuraiFilter.data.data
+                    });
+                }
+            }
+
+            return constraints;
+        }
+    },
+
+    // grafana specific utils
+    grafana : {
+        formatDataString : function (string) {
+            return string.match(/\((.*?),/)[1];
+        },
+
+        getQuery : function(string){
+            string =  string.replace('"1hour"', "${granularity}");
+            return "?target="+string;
         }
     }
 
-    if(samuraiData.filters.length) {
-        var samuraiFilters = samuraiData.filters;
-        for(var filterKey in samuraiFilters){
-            if(!samuraiFilters.hasOwnProperty(filterKey)) continue;
-            var samuraiFilter = samuraiFilters[filterKey];
-
-            if(samuraiFilter.id === 'Time') continue;
-
-            constraints.collapsedFilters.push({
-                label : samuraiFilter.id,
-                values : samuraiFilter.data.values,
-                isPivot : splitNames.indexOf(samuraiFilter.id) !== -1
-            });
-
-            constraints.filters.push({
-                type : samuraiFilter.data.filterType,
-                name : samuraiFilter.id,
-                values : samuraiFilter.data.data
-            });
-
-            // for(var value in samuraiFilter.data.values){
-            //     if(!samuraiFilter.data.values.hasOwnProperty(value)) continue;
-            //     var filterValue = samuraiFilter.data.values[value];
-            //
-            //     constraints.filters.push({
-            //         type : samuraiFilter.data.filterType,
-            //         name : samuraiFilter.id,
-            //         entityValue : filterValue
-            //     });
-            // }
-        }
-    }
-
-    return constraints;
 };

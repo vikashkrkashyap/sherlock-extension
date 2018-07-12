@@ -4,10 +4,10 @@ var supportedHosts = {
 };
 
 // Local
-var dashBoardBaseUrl = "http://local.sherlock-admin.mn";
+// var dashBoardBaseUrl = "http://local.sherlock-admin.mn";
 
 // Production
-// var dashBoardBaseUrl = "https://sherlock.reports.mn";
+var dashBoardBaseUrl = "https://sherlock.reports.mn";
 
 chrome.browserAction.onClicked.addListener(function(tab) {
 

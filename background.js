@@ -68,7 +68,7 @@ var prepareConfig = {
 
         var configuration = {
             name : null,
-            namespace : namespace,
+            namespace : decodeURI(namespace),
             datasource : 'Samurai',
             url : url.href,
             threshold : 50,
@@ -134,7 +134,7 @@ var prepareConfig = {
 
         var configuration = {
             name : null,
-            namespace : namespace,
+            namespace : decodeURI(namespace),
             datasource : 'Grafana',
             threshold : 50,
             trend : "drop",

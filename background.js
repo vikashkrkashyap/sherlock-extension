@@ -117,7 +117,8 @@ var prepareConfig = {
             configuration.filters = constraints.filters;
         }
 
-        util.redirectToDashboard(configuration, '/create-config');
+        // util.redirectToDashboard(configuration, '/create-config');
+        util.redirectToCmDashboard(configuration);
     },
 
     grafana : function(data, tab){
@@ -169,7 +170,8 @@ var prepareConfig = {
                 });
             }
         }
-        util.redirectToDashboard(configuration, '/create-config')
+        // util.redirectToDashboard(configuration, '/create-config')
+        util.redirectToCmDashboard(configuration);
     }
 };
 
@@ -194,6 +196,14 @@ var util = {
         var urlToRedirect = dashBoardBaseUrl + path;
         var encodedConfiguration = encodeURIComponent(LZString.compressToBase64(JSON.stringify(configuration)))
         window.open(urlToRedirect+'?config='+encodedConfiguration,'_blank');
+    },
+
+    redirectToCmDashboard : function(configuration){
+        var encodedConfiguration = LZString.compressToBase64(JSON.stringify(configuration));
+        var encodedConfiguration = encodedConfiguration.replace(/\//g, '$');
+        console.log(encodedConfiguration);
+        var urlToRedirect = 'http://local.cmadmin-v2.mn/sherlock/#/configurations/add/'+encodedConfiguration;
+       window.open(urlToRedirect,'_blank');
     },
 
     // samurai specific utils
@@ -253,9 +263,8 @@ var util = {
         },
 
         getQuery : function(string){
-            string =  string.replace('"1hour"', '"${granularity}"');
-            string = "target="+string;
-            return encodeURI(string);
+            string = "target=summarize(${level_wise_filters_or_split.metric},%22${granularity}%22)";
+            return string;
         }
     }
 

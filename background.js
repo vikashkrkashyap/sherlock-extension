@@ -4,10 +4,10 @@ var supportedHosts = {
 };
 
 // Local
-// var dashBoardBaseUrl = "http://local.sherlock-admin.mn";
+var dashBoardBaseUrl = "http://local.sherlock-admin.mn/api/v1";
 
 // Production
-var dashBoardBaseUrl = "https://sherlock.reports.mn";
+// var dashBoardBaseUrl = "https://sherlock.reports.mn/api/v1";
 
 chrome.browserAction.onClicked.addListener(function(tab) {
 
@@ -74,34 +74,28 @@ var prepareConfig = {
             threshold : 50,
             trend : "drop",
             track : "gradual",
-            metric : {
-                name : null,
-                formula : null
-            },
+            metrics : {},
             filters : [],
-            splits : []
+            splits : [],
+            formula : null
         };
 
 
         var constraints = null;
+        var metricFormula = null;
         var hasCustomMeasure = typeof data.customMeasures !== 'undefined' && data.customMeasures.length;
+        var hasFilterMeasure = typeof data.filteredMeasures !== 'undefined' && data.filteredMeasures && data.filteredMeasures.length;
 
         // Custom measure
         if(typeof metricString.tables !== 'undefined' || hasCustomMeasure){
             if(hasCustomMeasure || (typeof metricString.formula === 'undefined' && metricString.tables.length)){
-
-                var metricFormula = metricString.id;
+                metricFormula = metricString.id;
 
                 if(hasCustomMeasure){
                     metricFormula = data.customMeasures[0].parsedFormula;
                 }
 
-                constraints  = util.samurai.constrains(data);
-
-                configuration.metric.name = metricString.label;
-                configuration.metric.formula = metricFormula;
-                configuration.splits = constraints.splits;
-                configuration.filters = constraints.filters;
+                constraints = util.samurai.constrains(data);
             }
             else {
                 alert('This measure is not supported yet for creating the configuration');
@@ -109,16 +103,22 @@ var prepareConfig = {
             }
         }
         else {
-            // Singular
-            constraints  = util.samurai.constrains(data);
-            configuration.metric.name = metricString.label;
-            configuration.metric.formula = metricString.id;
-            configuration.splits = constraints.splits;
-            configuration.filters = constraints.filters;
+            metricFormula = metricString.id;
+            if(hasFilterMeasure){
+                metricFormula = metricString.alias;
+            }
+
+            constraints = util.samurai.constrains(data);
         }
 
-        // util.redirectToDashboard(configuration, '/create-config');
-        util.redirectToCmDashboard(configuration);
+        configuration.name = metricString.label;
+        configuration.metrics = util.samurai.getMetrics(data);
+        configuration.splits = constraints.splits;
+        configuration.filters = constraints.filters;
+        configuration.formula = util.samurai.getFormula(configuration.metrics, metricFormula);
+
+        util.redirectToDashboard(configuration, '/util/create-config');
+        // util.redirectToCmDashboard(configuration);
     },
 
     grafana : function(data, tab){
@@ -132,6 +132,7 @@ var prepareConfig = {
         var constraints = grafanaDataString.split('.');
         var url = new URL(tab.url);
         var namespace = url.origin+url.pathname;
+        var metricData = [];
 
         var configuration = {
             name : null,
@@ -141,18 +142,20 @@ var prepareConfig = {
             trend : "drop",
             track : "gradual",
             query : util.grafana.getQuery(data),
-            metric : {
-                name : null,
-                formula : null
-            },
+            metrics : {},
             filters : [],
-            splits : []
+            splits : [],
+            formula : null
         };
 
         for (var index = 0; index < constraints.length; index++)
         {
             if(index === constraints.length-1){
-                configuration.metric.name = configuration.metric.formula = constraints[index];
+                metricData.push(constraints[index]);
+
+                // todo :: remove metric name assignment when multiple metric is supported for grafana
+                configuration.name = constraints[index];
+                configuration.metrics = util.grafana.getMetrics(metricData);
                 break;
             }
 
@@ -170,8 +173,12 @@ var prepareConfig = {
                 });
             }
         }
-        // util.redirectToDashboard(configuration, '/create-config')
-        util.redirectToCmDashboard(configuration);
+
+        configuration.formula = util.grafana.getFormula(configuration.metrics);
+
+        console.log(configuration);
+        util.redirectToDashboard(configuration, '/util/create-config')
+        // util.redirectToCmDashboard(configuration);
     }
 };
 
@@ -200,8 +207,7 @@ var util = {
 
     redirectToCmDashboard : function(configuration){
         var encodedConfiguration = LZString.compressToBase64(JSON.stringify(configuration));
-        var encodedConfiguration = encodedConfiguration.replace(/\//g, '$');
-        console.log(encodedConfiguration);
+        encodedConfiguration = encodedConfiguration.replace(/\//g, '$');
         var urlToRedirect = 'http://local.cmadmin-v2.mn/sherlock/#/configurations/add/'+encodedConfiguration;
        window.open(urlToRedirect,'_blank');
     },
@@ -253,6 +259,114 @@ var util = {
             }
 
             return constraints;
+        },
+
+        getMetrics : function(data){
+            var metrics = {};
+            var index = 1;
+            var hasFilterMeasure = typeof data.filteredMeasures !== 'undefined' && data.filteredMeasures && data.filteredMeasures.length;
+
+            // for custom measure
+            if(typeof data.customMeasures !== 'undefined' && data.customMeasures.length){
+                // check if metric has filters
+                    index = 1;
+
+                    var entityMaps = data.customMeasures[0].formula.entityMap;
+                    for(var customMeasure in  entityMaps){
+                        if(!entityMaps.hasOwnProperty(customMeasure)) continue;
+
+                        var metricIndex = index.toString();
+                        metrics[metricIndex] = {
+                            name : entityMaps[customMeasure].data.mention.id,
+                            formulaName : entityMaps[customMeasure].data.mention.id,
+                            filters : []
+                        };
+
+                        if(hasFilterMeasure){
+                            data.filteredMeasures.forEach(function(filterMeasure){
+
+                                if(metrics[metricIndex].name === filterMeasure.id && filterMeasure.filters.length){
+
+                                    filterMeasure.filters.forEach(function(filter){
+                                        metrics[metricIndex].name = filterMeasure.alias;
+                                        metrics[metricIndex].filters.push({
+                                            type : filter.item.data.filterType,
+                                            name : filter.item.data.dimension,
+                                            values : filter.item.data.values
+                                        });
+                                    });
+                                }
+                            });
+                        }
+
+                        index++;
+                    }
+            }
+
+            // for single metric
+            else {
+
+                if(hasFilterMeasure){
+                    metrics = util.samurai.getMetricsFromFilterMeasures(data);
+                }
+                else {
+                    var formula = data.values[0].id;
+
+                    metrics[index.toString()] = {
+                        name : formula,
+                        filters : []
+                    }
+                }
+            }
+
+            return metrics;
+        },
+        getFormula : function(metrics, formula){
+
+            if(metrics.length === 0) return null;
+
+            // for single metric
+            if(formula.indexOf('{') === -1){
+                return "${1}";
+            }
+
+            // for metric with formula
+            var index = 0;
+            for(var metricKey in metrics){
+                if(metrics.hasOwnProperty(metricKey)){
+                    formula = formula.replace(metrics[metricKey].formulaName, (++index).toString());
+                    delete metrics[metricKey].formulaName;
+                }
+            }
+
+            return formula;
+        },
+
+        getMetricsFromFilterMeasures : function(data){
+            var index = 1;
+            var metrics = {};
+
+            data.filteredMeasures.forEach(function(filterMeasure){
+                var metricIndex = index.toString();
+                metrics[metricIndex] = {
+                    name : filterMeasure.alias,
+                    filters : []
+                };
+
+                if(filterMeasure.filters.length){
+                    filterMeasure.filters.forEach(function(filter){
+                        metrics[metricIndex].filters.push({
+                            type : filter.item.data.filterType,
+                            name : filter.item.data.dimension,
+                            values : filter.item.data.values
+                        });
+                    });
+                }
+
+                index++;
+            });
+
+            return metrics;
         }
     },
 
@@ -265,6 +379,38 @@ var util = {
         getQuery : function(string){
             string = "target=summarize(${level_wise_filters_or_split.metric},%22${granularity}%22)";
             return string;
+        },
+
+        getMetrics : function(metricData){
+
+            console.log(metricData);
+            var index = 1;
+            metrics = {};
+
+            metricData.forEach(function(metric){
+                metrics[(index++).toString()] = {
+                    name : metric,
+                    filters : []
+                };
+            });
+
+            return metrics;
+        },
+        getFormula : function(metrics){
+
+            // todo :: change the logic when multiple metric will be there, for now just hardcoding things
+
+            return "${1}"
+            // if(metrics.length === 0) return null;
+            //
+            // var index = 0;
+            // for(var metricKey in metrics){
+            //     if(metrics.hasOwnProperty(metricKey)){
+            //         formula = formula.replace(metrics[metricKey].name, (++index).toString());
+            //     }
+            // }
+            //
+            // return formula;
         }
     }
 
